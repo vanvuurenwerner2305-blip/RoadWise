@@ -1,0 +1,404 @@
+<title>Roadwise Week Planner</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&family=Overpass+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: green road sign names the trip; controls; bar chart of the window against an "average day" line; selected-day breakdown beside the route's normal week; full day list; sources. */
+:root{
+  --bg:#eef0ec; --surface:#ffffff; --fg:#17201b; --muted:#59645e; --line:#d5dad4; --grid:#e4e8e3;
+  --sign:#0b5c3a; --sign-fg:#ffffff; --marker:#f2c230; --marker-fg:#17201b;
+  --quiet:#2e8a57; --moderate:#b89412; --busy:#d9701c; --heavy:#c3352d; --ref:#17201b;
+  --display:"Overpass","Arial Narrow",system-ui,sans-serif;
+  --body:"Overpass",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"Overpass Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111613; --surface:#1a201c; --fg:#e6ebe7; --muted:#9aa69f; --line:#2c3530; --grid:#252d28;
+  --sign:#0e6a43; --sign-fg:#f4f7f5; --marker:#f2c230; --marker-fg:#17201b;
+  --quiet:#4cb37a; --moderate:#d9b52f; --busy:#ef8a3a; --heavy:#e65a4f; --ref:#e6ebe7; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111613; --surface:#1a201c; --fg:#e6ebe7; --muted:#9aa69f; --line:#2c3530; --grid:#252d28;
+  --sign:#0e6a43; --sign-fg:#f4f7f5; --marker:#f2c230; --marker-fg:#17201b;
+  --quiet:#4cb37a; --moderate:#d9b52f; --busy:#ef8a3a; --heavy:#e65a4f; --ref:#e6ebe7; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.5}
+.wrap{max-width:1060px;margin:0 auto;padding-block:28px 48px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:grid;gap:22px}
+a{color:var(--sign)} :root[data-theme="dark"] a{color:var(--quiet)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) a{color:var(--quiet)}}
+
+.sign{background:var(--sign);color:var(--sign-fg);border-radius:12px;padding:6px}
+.sign-inner{border:2.5px solid var(--sign-fg);border-radius:8px;padding:16px 20px;display:flex;flex-wrap:wrap;align-items:center;gap:14px 24px}
+.marker{background:var(--marker);color:var(--marker-fg);font-family:var(--display);font-weight:800;font-size:1.1rem;padding:4px 10px 2px;border-radius:5px;border:2px solid var(--sign-fg);white-space:nowrap}
+.places{flex:1 1 260px;min-width:0;font-family:var(--display);font-weight:800;font-size:clamp(1.5rem,4.5vw,2.4rem);line-height:1.1;text-wrap:balance}
+.places .arrow{font-weight:600;opacity:.85;margin:0 .3em}
+.dist{font-family:var(--display);text-align:right;font-variant-numeric:tabular-nums}
+.dist b{display:block;font-size:1.6rem;font-weight:800;line-height:1.1}
+.dist span{font-size:.85rem;opacity:.85}
+
+.controls{display:grid;grid-template-columns:1fr auto 1fr 1fr 1fr;gap:12px;align-items:end}
+@media (max-width:760px){.controls{grid-template-columns:1fr auto 1fr}.f-date{grid-column:span 1}.f-a{grid-column:1 / 2}.f-b{grid-column:2 / 4}}
+label{display:grid;gap:4px;font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);min-width:0}
+select,input[type=date]{font:inherit;font-size:1rem;color:var(--fg);background:var(--surface);border:1.5px solid var(--line);border-radius:8px;padding:9px 10px;width:100%;min-width:0;text-transform:none;letter-spacing:0}
+select:focus-visible,input:focus-visible,button:focus-visible{outline:2px solid var(--sign);outline-offset:2px}
+.swap{font:inherit;font-weight:800;font-size:1.1rem;background:var(--surface);color:var(--fg);border:1.5px solid var(--line);border-radius:8px;height:44px;width:44px;cursor:pointer}
+.chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chips small{color:var(--muted);font-size:.8rem}
+.chip-btn{font:inherit;font-size:.85rem;background:transparent;color:var(--fg);border:1.5px solid var(--line);border-radius:999px;padding:4px 12px;cursor:pointer}
+.chip-btn:hover,.swap:hover{border-color:var(--sign)}
+.chip-btn[aria-pressed="true"]{background:var(--sign);border-color:var(--sign);color:var(--sign-fg)}
+.warn{color:var(--busy);font-size:.85rem;margin:0}
+
+.verdict{display:grid;gap:4px;border-top:1.5px solid var(--line);padding-top:14px}
+.kicker{font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.verdict h1{margin:0;font-family:var(--display);font-weight:800;font-size:clamp(1.4rem,3.6vw,2rem);line-height:1.15;text-wrap:balance}
+.verdict h1 em{font-style:normal;color:var(--quiet)}
+.verdict p{margin:0;color:var(--muted);max-width:68ch}
+.verdict strong{color:var(--heavy);font-weight:600}
+
+.panel{background:var(--surface);border:1.5px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+.panel h2{margin:0 0 4px;font-family:var(--display);font-size:1.05rem;font-weight:800}
+.panel .hint{margin:0 0 12px;color:var(--muted);font-size:.85rem}
+
+/* Bar chart */
+.chart{display:grid;grid-template-columns:auto 1fr;gap:0 8px}
+.yax{position:relative;font-family:var(--mono);font-size:.7rem;color:var(--muted);width:3.6rem}
+.yax span{position:absolute;right:0;transform:translateY(50%);white-space:nowrap}
+.yax span.ref{color:var(--fg);font-weight:600}
+.scroll{overflow-x:auto;min-width:0;padding-top:4px}
+.plot{position:relative;display:flex;align-items:flex-end;gap:4px;min-width:100%}
+.gl{position:absolute;left:0;right:0;border-top:1px solid var(--grid);pointer-events:none}
+.gl.ref{border-top:2px dashed var(--ref);opacity:.8;z-index:2}
+.bar{flex:1 0 18px;position:relative;height:100%;display:flex;align-items:flex-end;background:none;border:0;padding:0;cursor:pointer}
+.bar i{display:block;width:100%;background:var(--c);border-radius:3px 3px 0 0;transition:height .35s ease,opacity .2s}
+.bar:hover i{opacity:.8}
+.bar.sel i{outline:2px solid var(--fg);outline-offset:1px}
+.xax{display:flex;gap:4px;min-width:100%;margin-top:6px}
+.xax span{flex:1 0 18px;text-align:center;font-size:.68rem;line-height:1.2;color:var(--muted);font-variant-numeric:tabular-nums}
+.xax span b{display:block;color:var(--fg);font-weight:600}
+.xax span.wk b{color:var(--muted);font-weight:400}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.78rem;color:var(--muted);margin-top:12px}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px;background:var(--c)}
+.legend .dash::before{height:0;border-top:2px dashed var(--ref);border-radius:0;width:16px;background:none;vertical-align:3px}
+
+.split{display:grid;grid-template-columns:1.5fr 1fr;gap:16px}
+@media (max-width:820px){.split{grid-template-columns:1fr}}
+
+/* Day detail */
+.dd-top{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;margin-bottom:12px}
+.dd-top h2{margin:0;font-size:1.35rem}
+.big{font-family:var(--display);font-weight:800;font-size:1.6rem;color:var(--c);font-variant-numeric:tabular-nums}
+.pill{font-size:.75rem;font-weight:600;padding:2px 10px;border-radius:999px;border:1.5px solid var(--c);color:var(--c)}
+.facts{list-style:none;margin:0;padding:0;display:grid}
+.facts li{display:grid;grid-template-columns:1fr auto;gap:2px 12px;padding:9px 0;border-top:1px solid var(--line)}
+.facts .eff{font-family:var(--mono);font-size:.85rem;font-variant-numeric:tabular-nums;text-align:right}
+.facts .src{grid-column:1 / -1;font-size:.78rem;color:var(--muted)}
+.tag{display:inline-block;font-size:.64rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border-radius:3px;margin-right:6px;vertical-align:1px}
+.tag.rec{background:var(--sign);color:var(--sign-fg)}
+.tag.est{border:1px solid var(--muted);color:var(--muted)}
+.dd-foot{margin-top:10px;font-size:.88rem;display:flex;flex-wrap:wrap;gap:4px 18px}
+.dd-foot b{font-family:var(--mono);font-weight:600}
+
+/* Day list */
+.list{list-style:none;margin:0;padding:0;display:grid}
+.row{display:grid;grid-template-columns:6.2rem 1fr 4.4rem 6rem;gap:10px;align-items:center;padding:7px 4px;border-top:1px solid var(--line);cursor:pointer;background:none;border-left:0;border-right:0;border-bottom:0;font:inherit;color:inherit;text-align:left;width:100%}
+.row:hover{background:var(--grid)}
+.row.sel{background:var(--grid)}
+.row .d{font-size:.88rem}.row .d b{font-weight:600}
+.row .track{height:8px;border-radius:999px;background:var(--grid);position:relative;overflow:visible}
+.row .track i{position:absolute;left:0;top:0;bottom:0;border-radius:999px;background:var(--c)}
+.row .track u{position:absolute;top:-3px;bottom:-3px;border-left:2px dashed var(--ref);opacity:.7}
+.row .pct,.row .dl{font-family:var(--mono);font-size:.8rem;text-align:right;font-variant-numeric:tabular-nums}
+.row .pct{color:var(--c)}
+@media (max-width:520px){.row{grid-template-columns:5.2rem 1fr 3.8rem}.row .dl{display:none}}
+
+details{border-top:1.5px solid var(--line);padding-top:14px;color:var(--muted);font-size:.9rem}
+summary{cursor:pointer;font-weight:600;color:var(--fg)}
+details ul,details ol{max-width:70ch;padding-left:1.2em}
+.note{font-size:.82rem;color:var(--muted);max-width:72ch;margin:0}
+@media (prefers-reduced-motion:reduce){.bar i{transition:none}}
+</style>
+
+<div class="wrap">
+  <header class="sign" aria-label="Trip">
+    <div class="sign-inner">
+      <span class="marker" id="road">N1</span>
+      <div class="places" id="places"></div>
+      <div class="dist"><b id="km"></b><span id="norm"></span></div>
+    </div>
+  </header>
+
+  <section class="controls" aria-label="Trip settings">
+    <label for="from">From<select id="from"></select></label>
+    <button class="swap" id="swap" type="button" aria-label="Swap direction" title="Swap direction">⇄</button>
+    <label for="to">To<select id="to"></select></label>
+    <label class="f-date f-a" for="d1">Earliest departure<input type="date" id="d1" value="2026-12-10"></label>
+    <label class="f-date f-b" for="d2">Latest departure<input type="date" id="d2" value="2026-12-20"></label>
+  </section>
+  <div class="chips" id="chips"><small>Jump to:</small></div>
+  <p class="warn" id="warn" hidden></p>
+
+  <section class="verdict" aria-live="polite">
+    <span class="kicker">Best day to leave in your window</span>
+    <h1 id="headline"></h1>
+    <p id="sub"></p>
+  </section>
+
+  <section class="panel" aria-label="Traffic by day">
+    <h2>Traffic by day, compared with an average day</h2>
+    <p class="hint">The dashed line is an average day on this route in this direction. Tap a bar to see why.</p>
+    <div class="chart">
+      <div class="yax" id="yax"></div>
+      <div class="scroll"><div class="plot" id="plot"></div><div class="xax" id="xax"></div></div>
+    </div>
+    <div class="legend">
+      <span class="dash">Average day</span>
+      <span style="--c:var(--quiet)">Below average</span>
+      <span style="--c:var(--moderate)">Up to 40% above</span>
+      <span style="--c:var(--busy)">40–90% above</span>
+      <span style="--c:var(--heavy)">Almost double or more</span>
+    </div>
+  </section>
+
+  <div class="split">
+    <section class="panel" id="detail" aria-live="polite"></section>
+    <section class="panel" aria-label="Normal week">
+      <h2>A normal week on this route</h2>
+      <p class="hint">Outside holidays, compared with an average day. <span class="tag est">Estimate</span></p>
+      <div class="chart">
+        <div class="yax" id="wyax"></div>
+        <div class="scroll"><div class="plot" id="wplot"></div><div class="xax" id="wxax"></div></div>
+      </div>
+      <p class="note" id="wnote" style="margin-top:10px"></p>
+    </section>
+  </div>
+
+  <section class="panel" aria-label="Every day in the window">
+    <h2>Every day in your window</h2>
+    <ol class="list" id="list"></ol>
+  </section>
+
+  <details>
+    <summary>How the forecast works and where the numbers come from</summary>
+    <ol>
+      <li>Each day starts from the route's normal week, scaled so an average day is 100%.</li>
+      <li>Holiday factors multiply that. Factors tagged <span class="tag rec">Records</span> line up with peak days SANRAL and the N3 Toll Concession have published for past seasons. Factors tagged <span class="tag est">Estimate</span> are reasonable guesses not yet checked against counts.</li>
+      <li>Some routes swing harder than others. SANRAL has listed the N12 and N14 as free-flowing for a whole festive season, while the N3 has reached 2,000–3,500 vehicles an hour on peak days.</li>
+      <li>Extra driving time only starts once traffic is well above average and is an estimate.</li>
+    </ol>
+    <p>Sources used:</p>
+    <ul id="srclist"></ul>
+  </details>
+  <p class="note">Version 2, sample model. I couldn't find public day-by-day traffic counts, so the normal-week shape is still an estimate. SANRAL keeps continuous count stations on these routes, and getting that data is the next step to back it up. School dates are approximate.</p>
+</div>
+
+<script>
+const SRC = {
+  s1516:{t:"SANRAL: expected peak festive season travel times (2015/16)",u:"https://pressoffice.mg.co.za/SANRAL/content/RgeVDqPYEV8vKJN3"},
+  sN1:{t:"SANRAL: no delays expected on the N1 Great North (2016/17)",u:"https://pressoffice.mg.co.za/SANRAL/content/dgp45Ma6PejqX9l8"},
+  sEaster:{t:"SANRAL: traffic over the Easter long weekends (2016)",u:"https://www.polity.org.za/article/sanral-traffic-over-long-weekends-2016-03-18"},
+  n3_2019:{t:"IOL: best times to travel the N3 in December (2019)",u:"https://iol.co.za/news/south-africa/kwazulu-natal/2019-12-12-travelling-to-kzn-on-the-n3-this-december-heres-the-best-times-to-do-so/"},
+  mooi:{t:"Motoring: 1,879 cars an hour at Mooi Plaza on 2 January (2022)",u:"https://m.motoring.co.za/news/1-879-cars-an-hour-passing-through-mooi-river-toll-plaza-as-holiday-makers-head-home-defdf6a2-f2e6-4c15-b242-db63b034bc07"}
+};
+// [km, clear-road minutes, road, swing, swing note, swing source]
+const ROUTES = {
+  "Pretoria|Kimberley":[530,330,"N14 · N12",0.5,"SANRAL listed the N12 and N14 as free-flowing","s1516"],
+  "Johannesburg|Kimberley":[475,300,"N12",0.5,"SANRAL listed the N12 as free-flowing","s1516"],
+  "Pretoria|Bloemfontein":[460,270,"N1",1.1,"N1 south had several high and extremely high days","s1516"],
+  "Johannesburg|Bloemfontein":[400,240,"N1",1.1,"N1 south had several high and extremely high days","s1516"],
+  "Pretoria|Beaufort West":[1000,600,"N1",1.1,"N1 south had several high and extremely high days","s1516"],
+  "Johannesburg|Beaufort West":[945,565,"N1",1.1,"N1 south had several high and extremely high days","s1516"],
+  "Pretoria|Cape Town":[1460,870,"N1",1.1,"N1 south had several high and extremely high days","s1516"],
+  "Johannesburg|Cape Town":[1400,835,"N1",1.1,"N1 south had several high and extremely high days","s1516"],
+  "Pretoria|Durban":[630,380,"N3",1.25,"The N3 reaches 2,000–3,500 vehicles an hour on peak days","n3_2019"],
+  "Johannesburg|Durban":[570,345,"N3",1.25,"The N3 reaches 2,000–3,500 vehicles an hour on peak days","n3_2019"],
+  "Pretoria|Polokwane":[260,165,"N1 North",0.9,"SANRAL expected above-average but no extreme volumes","sN1"],
+  "Johannesburg|Polokwane":[320,200,"N1 North",0.9,"SANRAL expected above-average but no extreme volumes","sN1"]
+};
+const GAUTENG = ["Pretoria","Johannesburg"];
+const DEST = ["Polokwane","Kimberley","Bloemfontein","Beaufort West","Cape Town","Durban"];
+const HOLIDAYS = {
+  "2026-12-16":"Day of Reconciliation","2026-12-25":"Christmas Day","2026-12-26":"Day of Goodwill",
+  "2027-01-01":"New Year's Day","2027-03-22":"Human Rights Day","2027-03-26":"Good Friday",
+  "2027-03-29":"Family Day","2027-04-27":"Freedom Day","2027-05-01":"Workers' Day","2027-06-16":"Youth Day",
+  "2027-08-09":"National Women's Day","2027-09-24":"Heritage Day","2027-12-16":"Day of Reconciliation",
+  "2027-12-25":"Christmas Day","2027-12-27":"Day of Goodwill","2028-01-01":"New Year's Day"
+};
+const SCHOOL = [{close:"2026-12-09",open:"2027-01-13"},{close:"2027-03-24",open:"2027-04-05"},
+  {close:"2027-06-25",open:"2027-07-20"},{close:"2027-10-01",open:"2027-10-11"},{close:"2027-12-08",open:"2028-01-12"}];
+
+// Normal week, Sun..Sat, before normalising to an average of 100 (estimate)
+const WEEK_RAW = { out:[92,86,80,82,96,142,114], in:[142,96,80,82,88,100,104] };
+const WEEK = {}; for (const k in WEEK_RAW){ const a = WEEK_RAW[k], m = a.reduce((x,y)=>x+y)/7; WEEK[k] = a.map(v=>v/m*100); }
+
+const DAY = 864e5;
+const parse = s => { const [y,m,d] = s.split("-").map(Number); return Date.UTC(y,m-1,d); };
+const iso = t => new Date(t).toISOString().slice(0,10);
+const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const DOW_LONG = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const fmtDate = t => { const d = new Date(t); return d.getUTCDate()+" "+MON[d.getUTCMonth()]; };
+const longDate = t => DOW_LONG[new Date(t).getUTCDay()]+" "+fmtDate(t);
+const kmFmt = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g," ");
+const pctTxt = r => { const p = Math.round(r-100); return p===0 ? "Average" : (p>0?"+":"−")+Math.abs(p)+"%"; };
+
+function forecast(t, dir, route){
+  const d = new Date(t), dow = d.getUTCDay(), m = d.getUTCMonth()+1, dd = d.getUTCDate();
+  const f = [];
+  const base = WEEK[dir][dow];
+  f.push({label:`Normal ${DOW_LONG[dow]} ${dir==="out"?"leaving Gauteng":"heading to Gauteng"}`, base:true, val:base, tag:"est",
+    note: dow===5&&dir==="out" ? "People leaving the city for the weekend" : dow===0&&dir==="in" ? "People returning for the work week" : ""});
+  const add = (label,x,tag,src,note) => f.push({label,x,tag,src,note});
+
+  if ((m===12 && dd>=5) || (m===1 && dd<=15)) add("Festive season", 1.3, "rec", "s1516", "SANRAL flagged busy days across December and early January");
+  for (const s of SCHOOL){
+    const off = Math.round((t - parse(s.close))/DAY);
+    if (dir==="out" && off>=0 && off<=4) add(`Schools closed ${fmtDate(parse(s.close))}: getaway wave`, [1.25,1.4,1.5,1.4,1.2][off], "rec", "s1516", "Extremely high at Colesberg and high on the N3 in the days after schools closed");
+    const before = Math.round((parse(s.open) - t)/DAY);
+    if (dir==="in" && before>=1 && before<=5) add(`Schools reopen ${fmtDate(parse(s.open))}: return wave`, [1.2,1.45,1.35,1.2,1.1][before-1], "rec", "n3_2019", "High northbound volumes the weekend before schools reopened");
+  }
+  const today = HOLIDAYS[iso(t)], tomorrow = HOLIDAYS[iso(t+DAY)];
+  if (today){
+    const x = /Christmas/.test(today) ? 0.6 : /New Year/.test(today) ? 0.7 : 0.92;
+    add(`${today}: most people stay put`, x, "est");
+  } else if (tomorrow){
+    add(`Day before ${tomorrow}`, dir==="out"?1.25:1.08, "rec", dir==="out"&&/Good Friday/.test(tomorrow)?"sEaster":"sN1",
+      /Good Friday/.test(tomorrow) ? "Carousel Plaza was very busy northbound the day before Good Friday" : "SANRAL saw above-average volumes the Thursday before Christmas");
+  }
+  for (const [h,name] of Object.entries(HOLIDAYS)){
+    const ht = parse(h), hd = new Date(ht).getUTCDay();
+    if (hd===1 && dir==="out" && t===ht-3*DAY) add(`Long weekend starts (${name})`, 1.25, "rec", "sEaster", "Toll plazas out of Gauteng were busy on long-weekend Fridays");
+    if (hd===1 && dir==="in" && t===ht) add("Long weekend ends: everyone heads home", 1.3, "rec", "sEaster", "Very busy toward Pretoria on Easter Monday");
+    if (hd===5 && dir==="in" && t===ht+2*DAY) add("Long weekend ends: everyone heads home", 1.25, "est");
+  }
+  if (dir==="in" && m===1 && (dd===2||dd===3)) add("New Year return wave", 1.35, "rec", "mooi", "1,879 cars an hour through Mooi Plaza northbound on 2 January");
+  if (dir==="out" && m===12 && (dd===18||dd===19)) add("Last weekend before Christmas", 1.15, "rec", "s1516", "High on the N1 to Bloemfontein 18–20 Dec");
+  if (dir==="out" && m===12 && dd===23) add("Last full day before Christmas", 1.15, "rec", "n3_2019", "High N3 volumes 12:00–15:00 on 23 Dec");
+  if (dd===25 || (m===12 && dd===15)) add("Payday", 1.08, "est");
+
+  // Christmas Day, Boxing Day and New Year's Day replace the normal pattern instead of scaling it
+  const FIXED = {"12-25":[30,"Christmas Day: hardly anyone drives"],"12-26":[55,"Boxing Day: very quiet on most routes"],"1-1":[45,"New Year's Day: very quiet, mostly late in the day"]};
+  const fx = FIXED[`${m}-${dd}`];
+  if (fx){
+    const keep = f.filter(x=>x.base);
+    keep[0].overridden = true;
+    keep.push({label:fx[1], set:fx[0], tag:"est",
+      note: m===12&&dd===26 ? "Not zero everywhere: SANRAL recorded more traffic on parts of the N2 on 26 Dec" : "Replaces the normal weekday and festive-season pattern",
+      src: m===12&&dd===26 ? "s1516" : undefined});
+    return { t, rel: fx[0], f: keep };
+  }
+
+  const raw = base * f.filter(x=>!x.base).reduce((p,x)=>p*x.x,1);
+  const rel = Math.max(30, 100 + (raw-100)*route[3]);
+  return { t, rel, f };
+}
+const level = r => r<100?"quiet":r<140?"moderate":r<190?"busy":"heavy";
+const LABEL = {quiet:"Below average",moderate:"Above average",busy:"Busy",heavy:"Very busy"};
+function delayMin(route, r){ const x = Math.min(1, Math.max(0,(r-115)/135)); return Math.round(route[1]*0.35*Math.pow(x,1.5)/5)*5; }
+function delayText(route, r){ const m = delayMin(route,r); if (m<10) return "No real delay"; if (m<60) return `+${m} min`; const h=Math.floor(m/60), x=m%60; return `+${h} h${x?` ${x} min`:""}`; }
+const durText = mins => { const h=Math.floor(mins/60), r=Math.round((mins%60)/5)*5; return `about ${h} h${r?` ${r} min`:""} on a clear road`; };
+
+const $ = id => document.getElementById(id);
+const fromSel=$("from"), toSel=$("to"), d1=$("d1"), d2=$("d2");
+let selected = null;
+
+fromSel.innerHTML = [...GAUTENG, ...DEST].map(p=>`<option>${p}</option>`).join("");
+function fillTo(keep){
+  const opts = GAUTENG.includes(fromSel.value) ? DEST : GAUTENG;
+  toSel.innerHTML = opts.map(p=>`<option>${p}</option>`).join("");
+  if (keep && opts.includes(keep)) toSel.value = keep;
+}
+const routeFor = (a,b) => ROUTES[`${a}|${b}`] || ROUTES[`${b}|${a}`];
+
+const QUICK = [["10–20 Dec","2026-12-10","2026-12-20"],["Christmas week","2026-12-19","2026-12-27"],["New Year return","2027-01-01","2027-01-12"],["Easter 2027","2027-03-20","2027-04-04"]];
+const chipsEl = $("chips");
+QUICK.forEach(([label,a,b])=>{
+  const btn = document.createElement("button");
+  btn.type="button"; btn.className="chip-btn"; btn.textContent=label; btn.dataset.a=a; btn.dataset.b=b;
+  btn.addEventListener("click",()=>{ d1.value=a; d2.value=b; selected=null; render(); });
+  chipsEl.appendChild(btn);
+});
+$("srclist").innerHTML = Object.values(SRC).map(s=>`<li><a href="${s.u}" target="_blank" rel="noopener">${s.t}</a></li>`).join("");
+
+function drawChart(plotEl, xaxEl, yaxEl, items, opts){
+  const max = Math.max(200, Math.ceil(Math.max(...items.map(i=>i.rel))/50)*50);
+  const H = opts.h;
+  plotEl.style.height = H+"px"; yaxEl.style.height = H+"px";
+  let grid = "", ylab = "";
+  for (let v=50; v<=max; v+=50){
+    const y = v/max*100;
+    grid += `<div class="gl${v===100?" ref":""}" style="bottom:${y}%"></div>`;
+    ylab += `<span class="${v===100?"ref":""}" style="bottom:${y}%">${v===100?"Average":(v>100?"+":"−")+Math.abs(v-100)+"%"}</span>`;
+  }
+  yaxEl.innerHTML = ylab;
+  plotEl.innerHTML = grid + items.map((it,i)=>`<button class="bar${opts.sel===i?" sel":""}" data-i="${i}" type="button" style="--c:var(--${level(it.rel)})" aria-label="${it.aria}: ${pctTxt(it.rel)} versus an average day"><i style="height:${it.rel/max*100}%"></i></button>`).join("");
+  xaxEl.innerHTML = items.map(it=>`<span class="${it.weekend?"":"wk"}"><b>${it.top}</b>${it.bot||""}</span>`).join("");
+  if (opts.onPick) plotEl.querySelectorAll(".bar").forEach(b=>b.addEventListener("click",()=>opts.onPick(+b.dataset.i)));
+}
+
+function render(){
+  const from=fromSel.value, to=toSel.value, route=routeFor(from,to);
+  const dir = GAUTENG.includes(from) ? "out" : "in";
+  $("road").textContent = route[2];
+  $("places").innerHTML = `${from}<span class="arrow">→</span>${to}`;
+  $("km").textContent = kmFmt(route[0])+" km";
+  $("norm").textContent = durText(route[1]);
+  chipsEl.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed", b.dataset.a===d1.value && b.dataset.b===d2.value));
+
+  let a = d1.value ? parse(d1.value) : parse("2026-12-10"), b = d2.value ? parse(d2.value) : a+10*DAY;
+  if (b < a) [a,b] = [b,a];
+  let n = Math.round((b-a)/DAY)+1, warn = $("warn");
+  if (n > 31){ n = 31; warn.hidden=false; warn.textContent = "Showing the first 31 days. Pick a shorter window to see the rest."; } else warn.hidden = true;
+
+  const days = Array.from({length:n},(_,i)=>forecast(a+i*DAY, dir, route));
+  const best = days.reduce((x,y)=>y.rel<x.rel?y:x), worst = days.reduce((x,y)=>y.rel>x.rel?y:x);
+  if (selected===null || selected>=n) selected = days.indexOf(best);
+  const avgWin = days.reduce((s,x)=>s+x.rel,0)/n;
+
+  $("headline").innerHTML = `Leave on <em>${longDate(best.t)}</em>`;
+  $("sub").innerHTML = `Expected ${best.rel<100?`${Math.round(100-best.rel)}% below`:`${Math.round(best.rel-100)}% above`} an average day, ${delayText(route,best.rel).toLowerCase()}. `+
+    (worst.rel-best.rel>=20 ? `Avoid <strong>${longDate(worst.t)}</strong> at ${pctTxt(worst.rel)}, which could add ${delayText(route,worst.rel).replace("+","")}. ` : "")+
+    `Across your ${n} days traffic averages ${pctTxt(avgWin).toLowerCase()} versus normal.`;
+
+  const pick = i => { selected=i; render(); };
+  drawChart($("plot"),$("xax"),$("yax"), days.map(d=>{const dt=new Date(d.t),w=dt.getUTCDay();return {rel:d.rel,top:dt.getUTCDate(),bot:DOW[w].slice(0,2),weekend:w===5||w===6||w===0,aria:longDate(d.t)};}), {h:220, sel:selected, onPick:pick});
+
+  const wk = [1,2,3,4,5,6,0].map(w=>({rel:100+(WEEK[dir][w]-100)*route[3], top:DOW[w], weekend:w===5||w===6||w===0, aria:DOW_LONG[w]}));
+  drawChart($("wplot"),$("wxax"),$("wyax"), wk, {h:150, sel:-1});
+  const peak = wk.reduce((x,y)=>y.rel>x.rel?y:x);
+  $("wnote").textContent = dir==="out"
+    ? `Leaving Gauteng, ${peak.aria} is the busy day as people head out for the weekend. Tuesdays and Wednesdays are quietest.`
+    : `Heading back to Gauteng, ${peak.aria} is the busy day as people return for the work week. Tuesdays and Wednesdays are quietest.`;
+
+  const s = days[selected], lv = level(s.rel);
+  $("detail").innerHTML = `
+    <span class="kicker">Selected day</span>
+    <div class="dd-top" style="--c:var(--${lv})"><h2>${longDate(s.t)}</h2><span class="big">${pctTxt(s.rel)}</span><span class="pill">${LABEL[lv]}</span></div>
+    <ul class="facts">${s.f.map(x=>`<li>
+      <span>${x.label}</span>
+      <span class="eff">${x.set!==undefined?"Set to "+pctTxt(x.set):x.base?(x.overridden?"Not used":pctTxt(100+(x.val-100)*route[3])):(x.x>=1?"+":"−")+Math.round(Math.abs(x.x-1)*100)+"%"}</span>
+      <span class="src"><span class="tag ${x.tag}">${x.tag==="rec"?"Records":"Estimate"}</span>${x.note?x.note+". ":""}${x.src?`<a href="${SRC[x.src].u}" target="_blank" rel="noopener">${SRC[x.src].t}</a>`:""}</span>
+    </li>`).join("")}
+    ${s.f.some(x=>x.set!==undefined)?"":`<li><span>Route swing on the ${route[2]}</span><span class="eff">×${route[3]}</span>
+      <span class="src"><span class="tag rec">Records</span>${route[4]}. <a href="${SRC[route[5]].u}" target="_blank" rel="noopener">${SRC[route[5]].t}</a></span></li>`}</ul>
+    <div class="dd-foot"><span>Extra driving time <b>${delayText(route,s.rel)}</b></span><span>Total about <b>${durText(route[1]+delayMin(route,s.rel)).replace("about ","").replace(" on a clear road","")}</b></span></div>`;
+
+  $("list").innerHTML = days.map((d,i)=>{
+    const lvl = level(d.rel), max = Math.max(200,...days.map(x=>x.rel));
+    return `<li><button class="row${i===selected?" sel":""}" type="button" data-i="${i}" style="--c:var(--${lvl})">
+      <span class="d"><b>${DOW[new Date(d.t).getUTCDay()]}</b> ${fmtDate(d.t)}</span>
+      <span class="track"><i style="width:${d.rel/max*100}%"></i><u style="left:${100/max*100}%"></u></span>
+      <span class="pct">${pctTxt(d.rel)}</span><span class="dl">${delayText(route,d.rel)}</span></button></li>`;
+  }).join("");
+  $("list").querySelectorAll(".row").forEach(r=>r.addEventListener("click",()=>pick(+r.dataset.i)));
+}
+
+fromSel.value="Pretoria"; fillTo("Polokwane");
+fromSel.addEventListener("change",()=>{ fillTo(toSel.value); render(); });
+toSel.addEventListener("change",()=>{ render(); });
+[d1,d2].forEach(x=>x.addEventListener("change",()=>{ selected=null; render(); }));
+$("swap").addEventListener("click",()=>{ const a=fromSel.value,b=toSel.value; fromSel.value=b; fillTo(a); render(); });
+render();
+</script>
